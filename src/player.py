@@ -16,6 +16,7 @@ from game_templates import (
     CONFIRMATION_VOTE_PATTERNS,
 )
 from trust_graph import TrustGraph
+from prompt_builder import PromptBuilder
 
 
 class Player:
@@ -42,6 +43,7 @@ class Player:
         self.protected = False            # Whether the player is protected by the doctor
         self.language = language if language else "English"
         self.game = game
+        self.prompt_builder = PromptBuilder()
 
     def __str__(self):
         """Return a string representation of the player."""
@@ -137,7 +139,7 @@ class Player:
     ):
         """
         Generate a prompt for the player based on their role.
-        All player references in prompts use player_name (not model_name).
+        Delegates to PromptBuilder.
 
         Args:
             game_state (dict): The current state of the game.
@@ -148,120 +150,13 @@ class Player:
         Returns:
             str: The prompt for the player.
         """
-        if discussion_history is None:
-            discussion_history = ""
-
-        context = self._get_discussion_context(all_players, discussion_history)
-
-        # Get list of alive player names (using player_name only)
-        player_names = [p.player_name for p in all_players if p.alive]
-
-        # Get the appropriate language, defaulting to English if not supported
-        language = self.language if self.language in GAME_RULES else "English"
-
-        # Get game rules for the player's language
-        game_rules = GAME_RULES[language]
-
-        if self.role == Role.MAFIA:
-            # For Mafia members: list allies by player_name
-            mafia_names = [
-                p.player_name for p in mafia_members if p != self and p.alive
-            ]
-            mafia_list = f"{', '.join(mafia_names) if mafia_names else 'None (you are the only Mafia left)'}"
-            if language == "Spanish":
-                mafia_list = f"{', '.join(mafia_names) if mafia_names else 'Ninguno (eres el único miembro de la Mafia que queda)'}"
-            elif language == "French":
-                mafia_list = f"{', '.join(mafia_names) if mafia_names else 'Aucun (vous êtes le seul membre de la Mafia restant)'}"
-            elif language == "Korean":
-                mafia_list = f"{', '.join(mafia_names) if mafia_names else '없음 (당신이 유일하게 남은 마피아입니다)'}"
-
-            prompt = PROMPT_TEMPLATES[language][Role.MAFIA].format(
-                model_name=self.player_name,  # Use player_name in prompts (not model_name)
-                game_rules=game_rules,
-                mafia_members=mafia_list,
-                player_names=", ".join(player_names),
-                game_state=game_state,
-                thinking_tag=THINKING_TAGS[language],
-                discussion_history=context,
-            )
-        elif self.role == Role.DOCTOR:
-            prompt = PROMPT_TEMPLATES[language][Role.DOCTOR].format(
-                model_name=self.player_name,  # Use player_name in prompts (not model_name)
-                game_rules=game_rules,
-                player_names=", ".join(player_names),
-                game_state=game_state,
-                thinking_tag=THINKING_TAGS[language],
-                discussion_history=context,
-            )
-        else:  # Role.VILLAGER
-            prompt = PROMPT_TEMPLATES[language][Role.VILLAGER].format(
-                model_name=self.player_name,  # Use player_name in prompts (not model_name)
-                game_rules=game_rules,
-                player_names=", ".join(player_names),
-                game_state=game_state,
-                thinking_tag=THINKING_TAGS[language],
-                discussion_history=context,
-            )
-
-        return prompt
-
-    def _get_discussion_context(self, all_players, full_discussion_history):
-        """
-        Get appropriate discussion context based on whether player uses graph.
-
-        For graph users: short recent history + graph state
-        For non-graph users: full history
-
-        Args:
-            all_players (list): List of all players.
-            full_discussion_history (str): Complete discussion history.
-
-        Returns:
-            str: Discussion context to include in prompt.
-        """
-        if not self.use_graph or self.trust_graph is None:
-            # Non-graph players get full history
-            return full_discussion_history
-
-        # === Graph-based players get compressed context ===
-
-        # Try to get last round's discussion
-        last_round = self.discussion_history_last_round_without_thinking()
-
-        # Fallback logic
-        MIN_CONTEXT_LENGTH = 500
-        MAX_CONTEXT_LENGTH = 3000
-
-        if last_round and len(last_round.strip()) >= MIN_CONTEXT_LENGTH:
-            recent_discussion = last_round
-        elif full_discussion_history:
-            # Fallback: take last N characters of full history
-            recent_discussion = full_discussion_history[-MAX_CONTEXT_LENGTH:]
-            newline_pos = recent_discussion.find('\n')
-            if 0 < newline_pos < 200:
-                recent_discussion = recent_discussion[newline_pos + 1:]
-            recent_discussion = f"[...previous discussion...]\n{recent_discussion}"
-        else:
-            recent_discussion = "[No discussion yet]"
-
-        # Truncate if too long
-        if len(recent_discussion) > MAX_CONTEXT_LENGTH:
-            recent_discussion = recent_discussion[-MAX_CONTEXT_LENGTH:]
-            newline_pos = recent_discussion.find('\n')
-            if 0 < newline_pos < 200:
-                recent_discussion = recent_discussion[newline_pos + 1:]
-            recent_discussion = f"[...truncated...]\n{recent_discussion}"
-
-        # Get graph representation (uses player_name for all nodes)
-        graph_prompt = self.graph_to_prompt(all_players)
-
-        # Combine graph + recent discussion
-        context = f"""{graph_prompt}
-
-=== RECENT DISCUSSION ===
-{recent_discussion}"""
-
-        return context
+        return self.prompt_builder.build_discussion_prompt(
+            player=self,
+            game_state=game_state,
+            all_players=all_players,
+            mafia_members=mafia_members,
+            discussion_history=discussion_history,
+        )
 
     # ------------------------------------------------------------------
     # LLM interaction
@@ -364,6 +259,7 @@ class Player:
         """
         Get a confirmation vote from the player on whether to eliminate another player.
         The player to eliminate is identified by player_name.
+        Delegates prompt building to PromptBuilder.
 
         Args:
             game_state (dict): The current state of the game, including who is up for elimination.
@@ -373,42 +269,11 @@ class Player:
         Returns:
             str: "agree" or "disagree" indicating the player's vote
         """
-        player_to_eliminate = game_state["confirmation_vote_for"]
-        game_state_str = game_state["game_state"]
-
-        context = self._get_discussion_context(all_players, discussion_history)
-
-        # Get the appropriate language, defaulting to English if not supported
-        language = (
-            self.language
-            if self.language in CONFIRMATION_VOTE_EXPLANATIONS
-            else "English"
-        )
-
-        # Get confirmation vote explanation for the player's language
-        confirmation_explanation = CONFIRMATION_VOTE_EXPLANATIONS[language].format(
-            player_to_eliminate=player_to_eliminate
-        )
-
-        if self.role == Role.VILLAGER:
-            role_string = "Villager"
-        elif self.role == Role.DOCTOR:
-            role_string = "Doctor"
-        elif self.role == Role.MAFIA:
-            role_string = "Mafia"
-        else:
-            print("Error: role not found")
-            role_string = "Participant"
-
-        # Generate prompt using player_name for identification
-        prompt = CONFIRMATION_VOTE_TEMPLATES[language].format(
-            model_name=self.player_name,  # Use player_name in prompts (not model_name)
-            role_string=role_string,
-            player_to_eliminate=player_to_eliminate,
-            confirmation_explanation=confirmation_explanation,
-            game_state_str=game_state_str,
-            thinking_tag=THINKING_TAGS[language],
-            discussion_history=context
+        prompt = self.prompt_builder.build_confirmation_vote_prompt(
+            player=self,
+            game_state=game_state,
+            all_players=all_players,
+            discussion_history=discussion_history,
         )
 
         response = self.get_response(prompt)
