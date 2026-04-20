@@ -115,9 +115,9 @@ class MafiaGame:
             else:
                 player_name = random.choice(available_names)
 
-            use_graph = False
-            if roles[i] == Role.VILLAGER or roles[i] == Role.DOCTOR:
-                use_graph = True
+            # use_graph = False
+            # if roles[i] == Role.VILLAGER or roles[i] == Role.DOCTOR:
+            use_graph = True
 
             # Create player with both model_name (hidden) and player_name (visible)
             player = Player(model_name, player_name, roles[i], language=self.language, game=self, use_graph=use_graph)
@@ -207,14 +207,14 @@ class MafiaGame:
 
         return False, None
 
-    def discussion_history_without_thinkings(self):
+    def discussion_history_without_thinking(self):
         """
         Get the discussion history for the current round, excluding thinking messages.
         Removes any <think></think> or <THINK></THINK> tags and their contents.
         If a closing tag is missing, removes everything from the opening tag to the end of the string.
         """
         # First handle properly closed tags (both lowercase and uppercase)
-        discussion_history_without_thinkings = re.sub(
+        discussion_history_without_thinking = re.sub(
             r"<[tT][hH][iI][nN][kK]>.*?</[tT][hH][iI][nN][kK]>",
             "",
             self.discussion_history,
@@ -222,23 +222,23 @@ class MafiaGame:
         )
 
         # Then handle any unclosed tags - remove from opening tag to the end of the string
-        discussion_history_without_thinkings = re.sub(
+        discussion_history_without_thinking = re.sub(
             r"<[tT][hH][iI][nN][kK]>.*$",
             "",
-            discussion_history_without_thinkings,
+            discussion_history_without_thinking,
             flags=re.DOTALL,
         )
 
-        return discussion_history_without_thinkings
+        return discussion_history_without_thinking
 
-    def discussion_history_last_round_without_thinkings(self):
+    def discussion_history_last_round_without_thinking(self):
         """
         Get the discussion history for the last round, excluding thinking messages.
         Removes any  or <THINK></THINK> tags and their contents.
         If a closing tag is missing, removes everything from the opening tag to the end of the string.
         """
         # First handle properly closed tags (both lowercase and uppercase)
-        discussion_history_without_thinkings = re.sub(
+        discussion_history_without_thinking = re.sub(
             r"<[tT][hH][iI][nN][kK]>.*?</[tT][hH][iI][nN][kK]>",
             "",
             self.discussion_history_last_round,
@@ -246,14 +246,14 @@ class MafiaGame:
         )
 
         # Then handle any unclosed tags - remove from opening tag to the end of the string
-        discussion_history_without_thinkings = re.sub(
+        discussion_history_without_thinking = re.sub(
             r"<[tT][hH][iI][nN][kK]>.*$",
             "",
-            discussion_history_without_thinkings,
+            discussion_history_without_thinking,
             flags=re.DOTALL,
         )
 
-        return discussion_history_without_thinkings
+        return discussion_history_without_thinking
 
     def execute_night_phase(self):
         """
@@ -278,7 +278,7 @@ class MafiaGame:
                     game_state,
                     self.get_alive_players(),
                     self.mafia_players,
-                    self.discussion_history_without_thinkings(),
+                    self.discussion_history_without_thinking(),
                 )
 
                 # Get response
@@ -368,7 +368,7 @@ class MafiaGame:
                 game_state,
                 self.get_alive_players(),
                 None,
-                self.discussion_history_without_thinkings(),
+                self.discussion_history_without_thinking(),
             )
 
             # Get response
@@ -686,7 +686,7 @@ class MafiaGame:
                 game_state,
                 alive_players,
                 self.mafia_players if player.role == Role.MAFIA else None,
-                self.discussion_history_without_thinkings(),
+                self.discussion_history_without_thinking(),
             )
 
             # Get response
@@ -762,7 +762,7 @@ class MafiaGame:
             game_state,
             self.get_alive_players(),
             self.mafia_players if player.role == Role.MAFIA else None,
-            self.discussion_history_without_thinkings(),
+            self.discussion_history_without_thinking(),
         )
 
         # Get response
@@ -810,7 +810,7 @@ class MafiaGame:
             }
 
             # Get player's vote
-            vote = player.get_confirmation_vote(player_state, self.players, self.discussion_history_without_thinkings())
+            vote = player.get_confirmation_vote(player_state, self.players, self.discussion_history_without_thinking())
 
             # Validate and record vote using player_name
             if vote.lower() in ["agree", "yes", "confirm", "true"]:
