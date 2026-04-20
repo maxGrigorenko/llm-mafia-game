@@ -28,13 +28,15 @@ class Player:
         Initialize a player.
 
         Args:
-            model_name (str): The name of the LLM model to use for this player (hidden from other players).
-            player_name (str): The visible name of the player in the game.
+            model_name (str): The name of the LLM model (hidden from other players, used only for API calls).
+            player_name (str): The unique visible name of the player in the game (used for all identification).
             role (Role): The role of the player in the game.
             language (str, optional): The language for the player. Defaults to English.
+            use_graph (bool, optional): Whether this player uses graph-based reasoning.
+            game (MafiaGame, optional): Reference to the game instance.
         """
-        self.model_name = model_name
-        self.player_name = player_name
+        self.model_name = model_name      # Hidden: only used for LLM API calls
+        self.player_name = player_name    # Visible: used for all in-game identification
         self.role = role
         self.alive = True
         self.use_graph = use_graph
@@ -50,7 +52,7 @@ class Player:
     def init_graph(self, all_players) -> nx.DiGraph:
         """
         Initialize subjective directed trust graph for this player.
-        Vertices: all players with their role probabilities.
+        Vertices: all players identified by player_name with their role probabilities.
         Edges: trust values between players (-1 to 1).
         Player knows their own role, so adjusts probabilities for others.
         Mafia players know each other at game start.
@@ -66,7 +68,7 @@ class Player:
         doctor_count = config.DOCTOR_COUNT
         villager_count = total_players - mafia_count - doctor_count
 
-        # Identify all mafia players
+        # Identify all mafia players by player_name
         all_mafia_players = [p.player_name for p in all_players if p.role.value == "Mafia"]
 
         # Adjust counts: remove self from appropriate category
@@ -90,7 +92,7 @@ class Player:
         else:
             other_mafia_prob = other_doctor_prob = other_villager_prob = 0
 
-        # Add all players as nodes
+        # Add all players as nodes, identified by player_name
         for player in all_players:
             if player.player_name == self.player_name:
                 # Self: know exact role
@@ -101,9 +103,9 @@ class Player:
                 }
                 self_trust = 1.0
             else:
-                # Mafia players know each other
+                # Mafia players know each other by player_name
                 if self.role.value == "Mafia" and player.player_name in all_mafia_players:
-                    # This is another mafia - we know their exact role
+                    # This is another mafia member - we know their exact role
                     role_probs = {"Mafia": 1.0, "Villager": 0.0, "Doctor": 0.0}
                 else:
                     # Others: use calculated probabilities
@@ -112,7 +114,6 @@ class Player:
                         "Villager": other_villager_prob,
                         "Doctor": other_doctor_prob
                     }
-                # Others trust themselves neutrally from our perspective
                 self_trust = 0.0
 
             G.add_node(
@@ -132,7 +133,7 @@ class Player:
                 last_updated=0
             )
 
-        # Initialize trust edges between all players
+        # Initialize trust edges between all players (identified by player_name)
         for player1 in all_players:
             for player2 in all_players:
                 if player1.player_name != player2.player_name:
@@ -157,6 +158,7 @@ class Player:
     def graph_to_prompt(self, all_players):
         """
         Convert subjective graph to compact text description for LLM prompt.
+        All players are referenced by player_name.
         """
         if not self.use_graph or self.graph is None:
             return ""
@@ -171,7 +173,7 @@ class Player:
             if player.player_name == self.player_name:
                 continue
 
-            # Get trust from me to them
+            # Get trust from me to them (nodes keyed by player_name)
             trust = self.graph[self.player_name][player.player_name]['trust']
 
             # Get role probabilities
@@ -217,11 +219,9 @@ class Player:
             if self.role == Role.MAFIA:
                 # For Mafia: suspicious if low trust (distrustful non-mafia)
                 is_mafia = probs.get("Mafia", 0.0) == 1.0
-                # Only consider non-mafia players as suspicious
                 if not is_mafia:
-                    # Suspicion is based on distrust (negative trust)
-                    suspicion_value = -trust  # Higher value means more suspicious
-                    if suspicion_value > 0.1:  # Only if actually distrustful
+                    suspicion_value = -trust
+                    if suspicion_value > 0.1:
                         suspicious.append((player.player_name, suspicion_value))
             else:
                 # For others: suspicious if high probability of being Mafia
@@ -249,7 +249,7 @@ class Player:
                 top_suspicious = ", ".join([f"{name}" for name, _ in suspicious[:2]])
                 lines.append(f"Most suspicious (likely Mafia): {top_suspicious}")
 
-        # Key mutual relationships
+        # Key mutual relationships (referenced by player_name)
         mutual_relations = []
         for player1 in alive_players:
             for player2 in alive_players:
@@ -277,6 +277,7 @@ class Player:
         """
         Update the subjective trust graph based on the last round's discussion.
         Uses LLM to evaluate trust changes and role probability updates.
+        All players are referenced by player_name.
 
         Args:
             all_players (list): List of all players in the game.
@@ -291,7 +292,7 @@ class Player:
         if not last_round_history or last_round_history.strip() == "":
             return  # Nothing to update
 
-        # Update alive status in graph
+        # Update alive status in graph (nodes keyed by player_name)
         for player in all_players:
             if player.player_name in self.graph.nodes:
                 self.graph.nodes[player.player_name]['alive'] = player.alive
@@ -315,13 +316,14 @@ class Player:
     def _build_graph_update_prompt(self, alive_players, last_round_history, current_round):
         """
         Build prompt for LLM to evaluate trust and role probabilities.
+        All players are referenced by player_name.
         """
         # Current graph state
         graph_state = self.graph_to_prompt(alive_players)
 
         # Role-specific context
         if self.role == Role.MAFIA:
-            # Get known mafia members
+            # Get known mafia members by player_name
             mafia_members = [
                 p.player_name for p in alive_players
                 if self.graph.nodes[p.player_name]['role_probabilities'].get("Mafia", 0) == 1.0
@@ -337,12 +339,12 @@ class Player:
             role_context = """You are VILLAGER. Your goal is to identify and eliminate mafia members.
     Look for suspicious behavior, inconsistencies, and unusual voting patterns."""
 
-        # Players to evaluate (exclude self, and for mafia - exclude known mafia)
+        # Players to evaluate (exclude self, and for mafia - exclude known mafia allies)
         players_to_evaluate = []
         for p in alive_players:
             if p.player_name == self.player_name:
                 continue
-            # Mafia doesn't need to re-evaluate known mafia
+            # Mafia doesn't need to re-evaluate known mafia allies
             if self.role == Role.MAFIA:
                 probs = self.graph.nodes[p.player_name]['role_probabilities']
                 if probs.get("Mafia", 0) == 1.0:
@@ -352,7 +354,7 @@ class Player:
         if not players_to_evaluate:
             return None
 
-        # Build the prompt
+        # Build the prompt (all player references use player_name)
         prompt = f"""You are {self.player_name} analyzing Round {current_round} of a Mafia game.
 
     {role_context}
@@ -404,12 +406,12 @@ class Player:
         """
         Parse LLM response and apply updates to the graph.
         Uses incremental updates (blending old and new values).
+        All graph nodes are keyed by player_name.
         """
         import json
 
         # Extract JSON from response
         try:
-            # Try to find JSON block
             json_match = re.search(r'\{[\s\S]*\}', response)
             if not json_match:
                 print(f"[{self.player_name}] No JSON found in graph update response")
@@ -422,13 +424,12 @@ class Player:
         alive_names = {p.player_name for p in alive_players}
 
         # Blending factor: how much weight to give new assessment vs old
-        # Higher = more weight to new information
         BLEND_FACTOR = 0.6
 
-        # Apply player assessments
+        # Apply player assessments (keyed by player_name)
         if "player_assessments" in updates:
             for player_name, assessment in updates["player_assessments"].items():
-                # Validate player
+                # Validate player by player_name
                 if player_name not in self.graph.nodes:
                     continue
                 if player_name == self.player_name:
@@ -436,7 +437,7 @@ class Player:
                 if player_name not in alive_names:
                     continue
 
-                # Skip known mafia for mafia players
+                # Skip known mafia allies for mafia players
                 if self.role == Role.MAFIA:
                     current_probs = self.graph.nodes[player_name]['role_probabilities']
                     if current_probs.get("Mafia", 0) == 1.0:
@@ -457,13 +458,13 @@ class Player:
                         remaining = 1.0 - blended_mafia
                         self.graph.nodes[player_name]['role_probabilities'] = {
                             "Mafia": blended_mafia,
-                            "Villager": remaining * 0.75,  # More villagers than doctors typically
+                            "Villager": remaining * 0.75,
                             "Doctor": remaining * 0.25
                         }
                     except (ValueError, TypeError):
                         pass
 
-                # Update trust edge from self to this player
+                # Update trust edge from self to this player (by player_name)
                 if "trust" in assessment:
                     try:
                         new_trust = float(assessment["trust"])
@@ -481,14 +482,14 @@ class Player:
                             evidence = self.graph[self.player_name][player_name].get('evidence', [])
                             evidence.append({
                                 'round': current_round,
-                                'reason': assessment["reasoning"][:100]  # Truncate
+                                'reason': assessment["reasoning"][:100]
                             })
-                            self.graph[self.player_name][player_name]['evidence'] = evidence[-5:]  # Keep last 5
+                            self.graph[self.player_name][player_name]['evidence'] = evidence[-5:]
 
                     except (ValueError, TypeError):
                         pass
 
-        # Apply observed relationships between other players
+        # Apply observed relationships between other players (by player_name)
         if "observed_relationships" in updates:
             for rel in updates["observed_relationships"]:
                 try:
@@ -496,7 +497,7 @@ class Player:
                     to_player = rel.get("to", "")
                     trust_change = float(rel.get("trust_change", 0))
 
-                    # Validate
+                    # Validate by player_name
                     if from_player not in alive_names or to_player not in alive_names:
                         continue
                     if from_player == self.player_name:
@@ -507,7 +508,7 @@ class Player:
                         continue
 
                     # Apply as incremental change (not absolute)
-                    trust_change = max(-0.5, min(0.5, trust_change))  # Limit change magnitude
+                    trust_change = max(-0.5, min(0.5, trust_change))
                     old_trust = self.graph[from_player][to_player].get('trust', 0.0)
                     new_trust = max(-1.0, min(1.0, old_trust + trust_change))
 
@@ -516,19 +517,19 @@ class Player:
 
                 except (ValueError, TypeError, KeyError):
                     continue
-    
+
     def discussion_history_without_thinkings(self):
         return self.game.discussion_history_without_thinkings()
-    
+
     def discussion_history_last_round_without_thinkings(self):
         return self.game.discussion_history_last_round_without_thinkings()
 
     def _find_target_player(self, target_name, all_players, exclude_mafia=False):
         """
-        Find a target player by name.
+        Find a target player by player_name.
 
         Args:
-            target_name (str): The name of the target player.
+            target_name (str): The player_name of the target player.
             all_players (list): List of all players in the game.
             exclude_mafia (bool, optional): Whether to exclude Mafia members from targets.
 
@@ -542,6 +543,7 @@ class Player:
             if exclude_mafia and player.role == Role.MAFIA:
                 continue
 
+            # Match against player_name only (not model_name)
             if target_name.lower() in player.player_name.lower():
                 return player
 
@@ -552,13 +554,13 @@ class Player:
     ):
         """
         Generate a prompt for the player based on their role.
+        All player references in prompts use player_name (not model_name).
 
         Args:
             game_state (dict): The current state of the game.
             all_players (list): List of all players in the game.
             mafia_members (list, optional): List of mafia members (only for Mafia role).
             discussion_history (str, optional): History of previous discussions.
-                Note: This should only contain day phase messages, night messages are filtered out.
 
         Returns:
             str: The prompt for the player.
@@ -567,12 +569,9 @@ class Player:
             discussion_history = ""
 
         context = self._get_discussion_context(all_players, discussion_history)
-        # Get list of player names (using visible player names)
-        player_names = [p.player_name for p in all_players if p.alive]
 
-        # Make sure we're only using player_name (not model_name) for other players
-        # This ensures players only know each other by their player names
-        player_info = [{"name": p.player_name, "alive": p.alive} for p in all_players]
+        # Get list of alive player names (using player_name only)
+        player_names = [p.player_name for p in all_players if p.alive]
 
         # Get the appropriate language, defaulting to English if not supported
         language = self.language if self.language in GAME_RULES else "English"
@@ -581,7 +580,7 @@ class Player:
         game_rules = GAME_RULES[language]
 
         if self.role == Role.MAFIA:
-            # For Mafia members (using visible player names)
+            # For Mafia members: list allies by player_name
             mafia_names = [
                 p.player_name for p in mafia_members if p != self and p.alive
             ]
@@ -594,7 +593,7 @@ class Player:
                 mafia_list = f"{', '.join(mafia_names) if mafia_names else '없음 (당신이 유일하게 남은 마피아입니다)'}"
 
             prompt = PROMPT_TEMPLATES[language][Role.MAFIA].format(
-                model_name=self.player_name,  # Use player_name in prompts
+                model_name=self.player_name,  # Use player_name in prompts (not model_name)
                 game_rules=game_rules,
                 mafia_members=mafia_list,
                 player_names=", ".join(player_names),
@@ -603,9 +602,8 @@ class Player:
                 discussion_history=context,
             )
         elif self.role == Role.DOCTOR:
-            # For Doctor
             prompt = PROMPT_TEMPLATES[language][Role.DOCTOR].format(
-                model_name=self.player_name,  # Use player_name in prompts
+                model_name=self.player_name,  # Use player_name in prompts (not model_name)
                 game_rules=game_rules,
                 player_names=", ".join(player_names),
                 game_state=game_state,
@@ -613,9 +611,8 @@ class Player:
                 discussion_history=context,
             )
         else:  # Role.VILLAGER
-            # For Villagers
             prompt = PROMPT_TEMPLATES[language][Role.VILLAGER].format(
-                model_name=self.player_name,  # Use player_name in prompts
+                model_name=self.player_name,  # Use player_name in prompts (not model_name)
                 game_rules=game_rules,
                 player_names=", ".join(player_names),
                 game_state=game_state,
@@ -624,7 +621,6 @@ class Player:
             )
 
         return prompt
-    
 
     def _get_discussion_context(self, all_players, full_discussion_history):
         """
@@ -650,15 +646,14 @@ class Player:
         last_round = self.discussion_history_last_round_without_thinkings()
 
         # Fallback logic
-        MIN_CONTEXT_LENGTH = 500  # Minimum useful context
-        MAX_CONTEXT_LENGTH = 3000  # Maximum to avoid token bloat
+        MIN_CONTEXT_LENGTH = 500
+        MAX_CONTEXT_LENGTH = 3000
 
         if last_round and len(last_round.strip()) >= MIN_CONTEXT_LENGTH:
             recent_discussion = last_round
         elif full_discussion_history:
             # Fallback: take last N characters of full history
             recent_discussion = full_discussion_history[-MAX_CONTEXT_LENGTH:]
-            # Try to start from a clean line break
             newline_pos = recent_discussion.find('\n')
             if 0 < newline_pos < 200:
                 recent_discussion = recent_discussion[newline_pos + 1:]
@@ -674,7 +669,7 @@ class Player:
                 recent_discussion = recent_discussion[newline_pos + 1:]
             recent_discussion = f"[...truncated...]\n{recent_discussion}"
 
-        # Get graph representation
+        # Get graph representation (uses player_name for all nodes)
         graph_prompt = self.graph_to_prompt(all_players)
 
         # Combine graph + recent discussion
@@ -688,6 +683,7 @@ class Player:
     def get_response(self, prompt):
         """
         Get a response from the LLM model using OpenRouter API.
+        Uses model_name for the API call (hidden from other players).
 
         Args:
             prompt (str): The prompt to send to the model.
@@ -699,7 +695,7 @@ class Player:
         response = get_llm_response(self.model_name, prompt)
 
         # Remove any <think></think> tags and their contents before sharing with other players
-        cleaned_response = re.sub(r"<think>.*?</think>", "", response, flags=re.DOTALL)
+        cleaned_response = re.sub(r"<[tT][hH][iI][nN][kK]>.*?</[tT][hH][iI][nN][kK]>", "", response, flags=re.DOTALL)
 
         # Clean up any extra whitespace that might have been created
         cleaned_response = re.sub(r"\n\s*\n", "\n\n", cleaned_response)
@@ -710,6 +706,7 @@ class Player:
     def parse_night_action(self, response, all_players):
         """
         Parse the night action from the player's response.
+        Targets are identified by player_name.
 
         Args:
             response (str): The response from the player (already cleaned of thinking tags).
@@ -719,7 +716,6 @@ class Player:
             tuple: (action_type, target_player) or (None, None) if no valid action.
         """
         if self.role == Role.MAFIA:
-            # Look for action pattern based on language
             pattern = ACTION_PATTERNS.get(self.language, ACTION_PATTERNS["English"])[
                 Role.MAFIA
             ]
@@ -727,7 +723,7 @@ class Player:
 
             if match:
                 target_name = match.group(1).strip()
-                # Find the target player, excluding Mafia members
+                # Find target by player_name, excluding Mafia members
                 target_player = self._find_target_player(
                     target_name, all_players, exclude_mafia=True
                 )
@@ -736,7 +732,6 @@ class Player:
             return None, None
 
         elif self.role == Role.DOCTOR:
-            # Look for action pattern based on language
             pattern = ACTION_PATTERNS.get(self.language, ACTION_PATTERNS["English"])[
                 Role.DOCTOR
             ]
@@ -744,7 +739,7 @@ class Player:
 
             if match:
                 target_name = match.group(1).strip()
-                # Find the target player
+                # Find target by player_name
                 target_player = self._find_target_player(target_name, all_players)
                 if target_player:
                     return "protect", target_player
@@ -756,6 +751,7 @@ class Player:
     def parse_day_vote(self, response, all_players):
         """
         Parse the day vote from the player's response.
+        Vote target is identified by player_name.
 
         Args:
             response (str): The response from the player (already cleaned of thinking tags).
@@ -764,22 +760,24 @@ class Player:
         Returns:
             Player or None: The player being voted for, or None if no valid vote.
         """
-        # Get vote pattern based on language
         pattern = VOTE_PATTERNS.get(self.language, VOTE_PATTERNS["English"])
         match = re.search(pattern, response, re.IGNORECASE)
 
         if match:
             target_name = match.group(1).strip()
-            # Find the target player
+            # Find target by player_name
             return self._find_target_player(target_name, all_players)
         return None
 
     def get_confirmation_vote(self, game_state, all_players, discussion_history):
         """
         Get a confirmation vote from the player on whether to eliminate another player.
+        The player to eliminate is identified by player_name.
 
         Args:
             game_state (dict): The current state of the game, including who is up for elimination.
+            all_players (list): List of all players.
+            discussion_history (str): Discussion history string.
 
         Returns:
             str: "agree" or "disagree" indicating the player's vote
@@ -811,9 +809,9 @@ class Player:
             print("Error: role not found")
             role_string = "Participant"
 
-        # Generate prompt based on language
+        # Generate prompt using player_name for identification
         prompt = CONFIRMATION_VOTE_TEMPLATES[language].format(
-            model_name=self.player_name,  # Use player_name in prompts
+            model_name=self.player_name,  # Use player_name in prompts (not model_name)
             role_string=role_string,
             player_to_eliminate=player_to_eliminate,
             confirmation_explanation=confirmation_explanation,

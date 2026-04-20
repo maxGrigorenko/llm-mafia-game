@@ -41,8 +41,8 @@ class MafiaGame:
             "actions": {},
             "eliminations": [],
             "eliminated_by_vote": [],  # Reset for the new round
-            "targeted_by_mafia": [],  # Reset for the new round
-            "protected_by_doctor": [],  # Reset for the new round
+            "targeted_by_mafia": [],   # Reset for the new round
+            "protected_by_doctor": [], # Reset for the new round
             "outcome": "",
         }
 
@@ -105,12 +105,11 @@ class MafiaGame:
         # Create players
         self.logger.header("PLAYER SETUP", Color.CYAN)
         for i, model_name in enumerate(selected_models):
-            # Generate a random player name instead of using model name
-            # Make sure we don't reuse names
+            # Generate a unique player name (not based on model name)
             used_names = [p.player_name for p in self.players]
             available_names = [name for name in player_names if name not in used_names]
 
-            # If we somehow run out of names, add a number to the model name
+            # If we somehow run out of names, use a numbered fallback
             if not available_names:
                 player_name = f"Player_{i+1}"
             else:
@@ -119,7 +118,8 @@ class MafiaGame:
             use_graph = False
             if roles[i] == Role.VILLAGER or roles[i] == Role.DOCTOR:
                 use_graph = True
-            # Create player with both model_name and player_name
+
+            # Create player with both model_name (hidden) and player_name (visible)
             player = Player(model_name, player_name, roles[i], language=self.language, game=self, use_graph=use_graph)
             self.players.append(player)
 
@@ -131,11 +131,10 @@ class MafiaGame:
             else:  # Role.VILLAGER
                 self.villager_players.append(player)
 
-            # Log player setup
+            # Log player setup using player_name as the visible identifier
             self.logger.player_setup(
-                player.model_name, player.role.value, player.player_name
+                player.player_name, player.role.value, player.player_name
             )
-
 
         # Set phase to night
         self.phase = "night"
@@ -146,8 +145,8 @@ class MafiaGame:
             "actions": {},
             "eliminations": [],
             "eliminated_by_vote": [],  # Reset for the new round
-            "targeted_by_mafia": [],  # Reset for the new round
-            "protected_by_doctor": [],  # Reset for the new round
+            "targeted_by_mafia": [],   # Reset for the new round
+            "protected_by_doctor": [], # Reset for the new round
             "outcome": "",
         }
 
@@ -231,11 +230,11 @@ class MafiaGame:
         )
 
         return discussion_history_without_thinkings
-    
+
     def discussion_history_last_round_without_thinkings(self):
         """
-        Get the discussion history for the current round, excluding thinking messages.
-        Removes any <think></think> or <THINK></THINK> tags and their contents.
+        Get the discussion history for the last round, excluding thinking messages.
+        Removes any  or <THINK></THINK> tags and their contents.
         If a closing tag is missing, removes everything from the opening tag to the end of the string.
         """
         # First handle properly closed tags (both lowercase and uppercase)
@@ -284,14 +283,15 @@ class MafiaGame:
 
                 # Get response
                 response = player.get_response(prompt)
+                # Log using player_name as the visible identifier
                 self.logger.player_response(
-                    player.model_name, "Mafia", response, player.player_name
+                    player.player_name, "Mafia", response, player.player_name
                 )
 
-                # Add to messages with night phase marker
+                # Add to messages using player_name as the speaker identifier
                 self.current_round_data["messages"].append(
                     {
-                        "speaker": player.model_name,
+                        "speaker": player.player_name,
                         "content": response,
                         "phase": "night",
                         "role": "Mafia",
@@ -307,22 +307,23 @@ class MafiaGame:
                 if action_type == "kill" and target:
                     mafia_targets.append(target)
                     action_text = f"Kill {target.player_name}"
-                    self.current_round_data["actions"][player.model_name] = action_text
+                    # Use player_name as the key for actions
+                    self.current_round_data["actions"][player.player_name] = action_text
                     self.logger.player_action(
-                        player.model_name, "Mafia", action_text, player.player_name
+                        player.player_name, "Mafia", action_text, player.player_name
                     )
                 else:
                     self.logger.error(
-                        f"Invalid action from {player.model_name} (Mafia)"
+                        f"Invalid action from {player.player_name} (Mafia)"
                     )
                     self.current_round_data["actions"][
-                        player.model_name
+                        player.player_name
                     ] = "Invalid action"
 
         # Determine Mafia kill target (majority vote)
         kill_target = None
         if mafia_targets:
-            # Count votes for each target
+            # Count votes for each target using player_name
             target_counts = {}
             for target in mafia_targets:
                 if target.player_name in target_counts:
@@ -340,10 +341,10 @@ class MafiaGame:
                             kill_target = player
                             break
 
-            # Record the final mafia target
+            # Record the final mafia target using player_name
             if kill_target:
                 self.current_round_data["targeted_by_mafia"].append(
-                    kill_target.model_name
+                    kill_target.player_name
                 )
 
         # Get action from Doctor
@@ -372,17 +373,18 @@ class MafiaGame:
 
             # Get response
             response = self.doctor_player.get_response(prompt)
+            # Log using player_name as the visible identifier
             self.logger.player_response(
-                self.doctor_player.model_name,
+                self.doctor_player.player_name,
                 "Doctor",
                 response,
                 self.doctor_player.player_name,
             )
 
-            # Add to messages with night phase marker
+            # Add to messages using player_name as the speaker identifier
             self.current_round_data["messages"].append(
                 {
-                    "speaker": self.doctor_player.model_name,
+                    "speaker": self.doctor_player.player_name,
                     "content": response,
                     "phase": "night",
                     "role": "Doctor",
@@ -399,22 +401,24 @@ class MafiaGame:
                 protected_player = target
                 target.protected = True
                 action_text = f"Protect {target.player_name}"
+                # Use player_name as the key for actions
                 self.current_round_data["actions"][
-                    self.doctor_player.model_name
+                    self.doctor_player.player_name
                 ] = action_text
-                self.current_round_data["protected_by_doctor"].append(target.model_name)
+                # Store protected player by player_name
+                self.current_round_data["protected_by_doctor"].append(target.player_name)
                 self.logger.player_action(
-                    self.doctor_player.model_name,
+                    self.doctor_player.player_name,
                     "Doctor",
                     action_text,
                     self.doctor_player.player_name,
                 )
             else:
                 self.logger.error(
-                    f"Invalid action from {self.doctor_player.model_name} (Doctor)"
+                    f"Invalid action from {self.doctor_player.player_name} (Doctor)"
                 )
                 self.current_round_data["actions"][
-                    self.doctor_player.model_name
+                    self.doctor_player.player_name
                 ] = "Invalid action"
 
         # Process night actions
@@ -422,15 +426,14 @@ class MafiaGame:
         if kill_target and not kill_target.protected:
             kill_target.alive = False
             eliminated_players.append(kill_target)
-            self.current_round_data["eliminations"].append(kill_target.model_name)
-            # We already added to targeted_by_mafia above
-            # Not adding to eliminated_by_vote since this is a night kill
-            outcome_text = f"{kill_target.player_name} [{kill_target.model_name}] was killed by the Mafia."
+            # Store eliminated player by player_name
+            self.current_round_data["eliminations"].append(kill_target.player_name)
+            outcome_text = f"{kill_target.player_name} was killed by the Mafia."
             self.current_round_data["outcome"] = outcome_text
             self.logger.event(outcome_text, Color.RED)
         else:
             if kill_target and kill_target.protected:
-                outcome_text = f"The Doctor protected {kill_target.player_name} [{kill_target.model_name}] from the Mafia."
+                outcome_text = f"The Doctor protected {kill_target.player_name} from the Mafia."
                 self.current_round_data["outcome"] = outcome_text
                 self.logger.event(outcome_text, Color.BLUE)
             else:
@@ -482,21 +485,21 @@ class MafiaGame:
             votes=votes,
         )
 
-        # Count votes
+        # Count votes (votes dict uses player_name -> player_name mapping)
         vote_counts = {}
-        vote_details = {}  # New dictionary to store who voted for whom
-        for voter, target_name in votes.items():
+        vote_details = {}  # Stores who voted for whom (by player_name)
+        for voter_name, target_name in votes.items():
             if target_name in vote_counts:
                 vote_counts[target_name] += 1
             else:
                 vote_counts[target_name] = 1
 
-            # Store voter information for each target
+            # Store voter information for each target (all by player_name)
             if target_name not in vote_details:
                 vote_details[target_name] = []
-            vote_details[target_name].append(voter)
+            vote_details[target_name].append(voter_name)
 
-        # Find player with most votes
+        # Find player with most votes (using player_name throughout)
         max_votes = 0
         eliminated_player = None
 
@@ -520,7 +523,7 @@ class MafiaGame:
             self.current_round_data["confirmation_votes"] = confirmation_votes
 
             if not is_confirmed:
-                confirmation_text = f"The elimination of {eliminated_player.model_name} was rejected by the town."
+                confirmation_text = f"The elimination of {eliminated_player.player_name} was rejected by the town."
                 self.current_round_data["outcome"] += f" {confirmation_text}"
                 self.logger.event(confirmation_text, Color.YELLOW)
 
@@ -539,26 +542,27 @@ class MafiaGame:
 
                 eliminated_player.alive = False
                 eliminated_players.append(eliminated_player)
+                # Store eliminated player by player_name
                 self.current_round_data["eliminations"].append(
-                    eliminated_player.model_name
+                    eliminated_player.player_name
                 )
-                # Add to eliminated_by_vote to track players eliminated by voting
+                # Track players eliminated by voting using player_name
                 self.current_round_data["eliminated_by_vote"] = [
-                    eliminated_player.model_name
+                    eliminated_player.player_name
                 ]
 
                 # Store vote details in the round data
                 self.current_round_data["vote_counts"] = vote_counts
                 self.current_round_data["vote_details"] = vote_details
 
-                # Include vote count in the outcome text
-                outcome_text = f"{eliminated_player.player_name} [{eliminated_player.model_name}] was eliminated by vote with {vote_counts[eliminated_player.player_name]} votes."
+                # Include vote count in the outcome text (use player_name only)
+                outcome_text = f"{eliminated_player.player_name} was eliminated by vote with {vote_counts[eliminated_player.player_name]} votes."
                 self.current_round_data["outcome"] += f" {outcome_text}"
                 self.logger.event(outcome_text, Color.YELLOW)
 
                 # Add last words to the outcome and discussion history
                 if last_words:
-                    last_words_text = f'{eliminated_player.player_name} [{eliminated_player.model_name}]\'s last words: "{last_words}"'
+                    last_words_text = f"{eliminated_player.player_name}'s last words: \"{last_words}\""
                     self.current_round_data["last_words"] = last_words
                     self.logger.event(last_words_text, Color.CYAN)
                     # Add last words to discussion history
@@ -568,10 +572,10 @@ class MafiaGame:
                     self.discussion_history_last_round += (
                         f"{eliminated_player.player_name}: {last_words}\n\n"
                     )
-                    # Add to messages
+                    # Add to messages using player_name as speaker
                     self.current_round_data["messages"].append(
                         {
-                            "speaker": eliminated_player.model_name,
+                            "speaker": eliminated_player.player_name,
                             "content": last_words,
                             "phase": "day",
                             "role": eliminated_player.role.value,
@@ -580,13 +584,10 @@ class MafiaGame:
                         }
                     )
 
-                # Log who voted for the eliminated player
-                voters = vote_details.get(eliminated_player.model_name, [])
+                # Log who voted for the eliminated player (all by player_name)
+                voters = vote_details.get(eliminated_player.player_name, [])
                 if voters:
-                    voter_names = [
-                        name.split("/")[-1] for name in voters
-                    ]  # Extract model names
-                    voter_text = f"Voted by: {', '.join(voter_names)}"
+                    voter_text = f"Voted by: {', '.join(voters)}"
                     self.current_round_data["voters"] = voters
                     self.logger.event(voter_text, Color.YELLOW)
         else:
@@ -608,8 +609,8 @@ class MafiaGame:
             "actions": {},
             "eliminations": [],
             "eliminated_by_vote": [],  # Reset for the new round
-            "targeted_by_mafia": [],  # Reset for the new round
-            "protected_by_doctor": [],  # Reset for the new round
+            "targeted_by_mafia": [],   # Reset for the new round
+            "protected_by_doctor": [], # Reset for the new round
             "outcome": "",
         }
 
@@ -633,7 +634,7 @@ class MafiaGame:
             instruction (str): Specific instruction for this interaction round
             messages (list): List to collect all messages
             collect_votes (bool): Whether to collect votes in this round
-            votes (dict): Dictionary to store votes if collect_votes is True
+            votes (dict): Dictionary to store votes (player_name -> player_name) if collect_votes is True
         """
         self.discussion_history_last_round = ""
         for player in alive_players:
@@ -680,7 +681,7 @@ class MafiaGame:
                     player.language, voting_reminders["English"]
                 )
                 game_state += reminder
-            
+
             prompt = player.generate_prompt(
                 game_state,
                 alive_players,
@@ -690,21 +691,22 @@ class MafiaGame:
 
             # Get response
             response = player.get_response(prompt)
+            # Log using player_name as the visible identifier
             self.logger.player_response(
-                player.model_name, player.role.value, response, player.player_name
+                player.player_name, player.role.value, response, player.player_name
             )
 
-            # Add to messages
+            # Add to messages using player_name as the speaker identifier
             messages.append(
                 {
-                    "speaker": player.model_name,
+                    "speaker": player.player_name,
                     "content": response,
                     "player_name": player.player_name,
                 }
             )
             self.current_round_data["messages"].append(
                 {
-                    "speaker": player.model_name,
+                    "speaker": player.player_name,
                     "content": response,
                     "phase": phase_type,
                     "role": player.role.value,
@@ -712,31 +714,31 @@ class MafiaGame:
                 }
             )
 
-            # Parse vote if in voting round
+            # Parse vote if in voting round; store as player_name -> player_name
             if collect_votes and votes is not None:
                 vote_target = player.parse_day_vote(response, alive_players)
                 if vote_target:
                     votes[player.player_name] = vote_target.player_name
                     action_text = f"Vote {vote_target.player_name}"
-                    self.current_round_data["actions"][player.model_name] = action_text
+                    # Use player_name as the key for actions
+                    self.current_round_data["actions"][player.player_name] = action_text
                     self.logger.player_action(
-                        player.model_name,
+                        player.player_name,
                         player.role.value,
                         action_text,
                         player.player_name,
                     )
                 else:
                     self.logger.warning(
-                        f"{player.model_name} failed to cast a valid vote during voting phase"
+                        f"{player.player_name} failed to cast a valid vote during voting phase"
                     )
                     self.current_round_data["actions"][
-                        player.model_name
+                        player.player_name
                     ] = "Invalid vote"
 
-            # Update discussion history
+            # Update discussion history using player_name as the speaker
             self.discussion_history += f"{player.player_name}: {response}\n\n"
             self.discussion_history_last_round += f"{player.player_name}: {response}\n\n"
-
 
     def get_last_words(self, player, vote_count):
         """
@@ -750,7 +752,7 @@ class MafiaGame:
             str: The player's last words.
         """
         self.logger.event(
-            f"Getting last words from {player.player_name} [{player.model_name}]...",
+            f"Getting last words from {player.player_name}...",
             Color.CYAN,
         )
 
@@ -766,7 +768,7 @@ class MafiaGame:
         # Get response
         response = player.get_response(prompt)
         self.logger.player_response(
-            player.model_name,
+            player.player_name,
             f"{player.role.value} (Last Words)",
             response,
             player.player_name,
@@ -790,17 +792,17 @@ class MafiaGame:
         voting_players = [p for p in alive_players if p != player_to_eliminate]
 
         self.logger.event(
-            f"Confirmation vote for eliminating {player_to_eliminate.player_name} [{player_to_eliminate.model_name}]",
+            f"Confirmation vote for eliminating {player_to_eliminate.player_name}",
             Color.YELLOW,
         )
 
-        # Collect votes
+        # Collect votes (identified by player_name)
         confirmation_votes = {"agree": [], "disagree": []}
 
         for player in voting_players:
             # Prepare game state for the player
             game_state_str = self.get_game_state()
-            # Create a dictionary with the game state and the player to eliminate
+            # Create a dictionary with the game state and the player to eliminate (by player_name)
             player_state = {
                 "game_state": game_state_str,
                 "confirmation_vote_for": player_to_eliminate.player_name,
@@ -810,17 +812,17 @@ class MafiaGame:
             # Get player's vote
             vote = player.get_confirmation_vote(player_state, self.players, self.discussion_history_without_thinkings())
 
-            # Validate and record vote
+            # Validate and record vote using player_name
             if vote.lower() in ["agree", "yes", "confirm", "true"]:
                 confirmation_votes["agree"].append(player.player_name)
                 self.logger.event(
-                    f"{player.player_name} [{player.model_name}] voted to CONFIRM elimination",
+                    f"{player.player_name} voted to CONFIRM elimination",
                     Color.GREEN,
                 )
             else:
                 confirmation_votes["disagree"].append(player.player_name)
                 self.logger.event(
-                    f"{player.player_name} [{player.model_name}] voted to REJECT elimination",
+                    f"{player.player_name} voted to REJECT elimination",
                     Color.RED,
                 )
 
@@ -858,9 +860,10 @@ class MafiaGame:
         Run the Mafia game until completion.
 
         Returns:
-            tuple: (winner, rounds_data, participants, language) where winner is "Mafia" or "Villagers".
-                   rounds_data includes all messages (day and night phases) for game details,
-                   but players only see day phase messages during the game.
+            tuple: (winner, rounds_data, participants, language, critic_review)
+                   winner is "Mafia" or "Villagers".
+                   rounds_data includes all messages (day and night phases).
+                   participants is keyed by player_name.
                    language is the language used for the game.
         """
         # Setup game
@@ -898,7 +901,7 @@ class MafiaGame:
         if self.current_round_data["round_number"] > 0:
             self.rounds_data.append(self.current_round_data)
 
-        # Create participants dictionary with both model_name and player_name
+        # Create participants dictionary keyed by player_name
         participants = {}
         for player in self.players:
             participants[player.player_name] = {
@@ -925,23 +928,23 @@ class MafiaGame:
         Returns:
             dict: A dictionary containing the critic review with title, content, and one-sentence summary.
         """
-        # Get the game summary information
+        # Get the game summary information using player_name for identification
         game_summary = {
             "winner": winner,
             "rounds": self.round_number,
             "participants": {
-                player.model_name: player.role.value for player in self.players
+                player.player_name: player.role.value for player in self.players
             },
             "eliminations": [],
         }
 
-        # Collect eliminations by round
+        # Collect eliminations by round (eliminations are already stored by player_name)
         for round_data in self.rounds_data:
             if "eliminations" in round_data and round_data["eliminations"]:
-                for player in round_data["eliminations"]:
+                for player_name in round_data["eliminations"]:
                     game_summary["eliminations"].append(
                         {
-                            "player": player,
+                            "player": player_name,
                             "round": round_data["round_number"],
                             "phase": round_data.get("phase", "unknown"),
                         }
@@ -996,16 +999,14 @@ Format your response as a JSON object with 'title', 'content', and 'one_liner' f
                     # Fallback if JSON parsing fails
                     return {
                         "title": "AI Mafia Game Review",
-                        "content": response_content[
-                            :300
-                        ],  # Truncate to reasonable length
+                        "content": response_content[:300],
                         "one_liner": "A game that left our critic speechless!",
                     }
             else:
                 # If no JSON found, create a simple structure
                 return {
                     "title": "AI Mafia Game Review",
-                    "content": response_content[:300],  # Truncate to reasonable length
+                    "content": response_content[:300],
                     "one_liner": "A game that defies conventional criticism!",
                 }
 
@@ -1059,4 +1060,3 @@ player_names = [
     "Winter",
     "Zion",
 ]
-
