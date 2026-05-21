@@ -17,6 +17,7 @@ from game_templates import (
 )
 from trust_graph import TrustGraph
 from prompt_builder import PromptBuilder
+from phrase_graph import PhraseGraph
 
 
 class Player:
@@ -44,6 +45,7 @@ class Player:
         self.language = language if language else "English"
         self.game = game
         self.prompt_builder = PromptBuilder()
+        self.graph_sequence = []          # Stores per-phrase relationship graphs
 
     def __str__(self):
         """Return a string representation of the player."""
@@ -94,6 +96,52 @@ class Player:
             discussion_history=last_round_history,
             model_name=self.model_name,
         )
+
+    # ------------------------------------------------------------------
+    # Per-phrase graph sequence methods
+    # ------------------------------------------------------------------
+
+    def generate_per_phrase_graph(self, message, alive_players, current_round, phase):
+        """
+        Generate a per-phrase relationship graph for the given message and
+        append it to the graph_sequence.
+
+        The player's own LLM model (self.model_name) is used to evaluate the
+        attitude weights toward each mentioned player.
+
+        Args:
+            message (str): The message spoken by the player.
+            alive_players (list): List of currently alive Player objects.
+            current_round (int): Current round number.
+            phase (str): Current game phase string.
+        """
+        graph_data = PhraseGraph.build_graph(
+            message=message,
+            speaker=self.player_name,
+            alive_players=alive_players,
+            current_round=current_round,
+            phase=phase,
+            model_name=self.model_name,  # Use this player's own LLM to assign weights
+        )
+        self.graph_sequence.append(graph_data)
+
+    def graph_sequence_to_dict(self):
+        """
+        Return the graph sequence as a JSON-serializable list.
+
+        Returns:
+            list: The list of graph dictionaries.
+        """
+        return self.graph_sequence
+
+    def graph_sequence_from_dict(self, data):
+        """
+        Restore the graph sequence from a list of dictionaries.
+
+        Args:
+            data (list): List of graph dictionaries to restore.
+        """
+        self.graph_sequence = data
 
     # ------------------------------------------------------------------
     # Discussion history helpers
@@ -176,7 +224,7 @@ class Player:
         print(f"\n\n{len(prompt)=} {prompt=}\n\n")
         response = get_llm_response(self.model_name, prompt)
 
-        # Remove any <think></think> tags and their contents before sharing with other players
+        # Remove any <think> tags and their contents before sharing with other players
         cleaned_response = re.sub(r"<[tT][hH][iI][nN][kK]>.*?</[tT][hH][iI][nN][kK]>", "", response, flags=re.DOTALL)
 
         # Clean up any extra whitespace that might have been created
