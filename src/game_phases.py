@@ -354,18 +354,24 @@ class DayExecutor:
                     )
                     self.game.current_round_data["actions"][player.player_name] = "Invalid vote"
 
-            try:
-                player.generate_per_phrase_graph(
-                    message=response,
-                    alive_players=alive_players,
-                    current_round=self.game.round_number,
-                    phase=phase_type,
-                )
-            except Exception as e:
-                self.game.logger.warning(
-                    f"[PhraseGraph] Failed to generate per-phrase graph for "
-                    f"{player.player_name}: {e}"
-                )
+            # Update per-phrase graphs for each alive player that has phrase graph enabled
+            for listener in alive_players:
+                if listener.use_phrase_graph:
+                    try:
+                        listener.generate_per_phrase_graph(
+                            message=response,
+                            speaker_name=player.player_name,
+                            alive_players=alive_players,
+                            current_round=self.game.round_number,
+                            phase=phase_type,
+                        )
+                        print(f'{listener.player_name}: add phrase_graph')
+                        print(listener.graph_sequence)
+                    except Exception as e:
+                        self.game.logger.warning(
+                            f"[PhraseGraph] Failed to generate per-phrase graph for "
+                            f"{listener.player_name} on message from {player.player_name}: {e}"
+                        )
 
             self.game.discussion_history += f"{player.player_name}: {response}\n\n"
             self.game.discussion_history_last_round += f"{player.player_name}: {response}\n\n"

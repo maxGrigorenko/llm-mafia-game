@@ -23,7 +23,7 @@ from phrase_graph import PhraseGraph
 class Player:
     """Represents an LLM player in the Mafia game."""
 
-    def __init__(self, model_name, player_name, role, language=None, use_graph=False, game=None):
+    def __init__(self, model_name, player_name, role, language=None, use_graph=False, use_phrase_graph=False, game=None):
         """
         Initialize a player.
 
@@ -33,6 +33,7 @@ class Player:
             role (Role): The role of the player in the game.
             language (str, optional): The language for the player. Defaults to English.
             use_graph (bool, optional): Whether this player uses graph-based reasoning.
+            use_phrase_graph (bool, optional): Whether this player uses per-phrase relationship graphs.
             game (MafiaGame, optional): Reference to the game instance.
         """
         self.model_name = model_name      # Hidden: only used for LLM API calls
@@ -40,6 +41,7 @@ class Player:
         self.role = role
         self.alive = True
         self.use_graph = use_graph
+        self.use_phrase_graph = use_phrase_graph  # per-phrase graph activation
         self.trust_graph = None           # TrustGraph instance (replaces self.graph)
         self.protected = False            # Whether the player is protected by the doctor
         self.language = language if language else "English"
@@ -101,7 +103,7 @@ class Player:
     # Per-phrase graph sequence methods
     # ------------------------------------------------------------------
 
-    def generate_per_phrase_graph(self, message, alive_players, current_round, phase):
+    def generate_per_phrase_graph(self, message, speaker_name, alive_players, current_round, phase):
         """
         Generate a per-phrase relationship graph for the given message and
         append it to the graph_sequence.
@@ -111,13 +113,14 @@ class Player:
 
         Args:
             message (str): The message spoken by the player.
+            speaker_name (str): player-speaker
             alive_players (list): List of currently alive Player objects.
             current_round (int): Current round number.
             phase (str): Current game phase string.
         """
         graph_data = PhraseGraph.build_graph(
             message=message,
-            speaker=self.player_name,
+            speaker=speaker_name,
             alive_players=alive_players,
             current_round=current_round,
             phase=phase,
