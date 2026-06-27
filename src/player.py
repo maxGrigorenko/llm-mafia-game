@@ -327,6 +327,11 @@ class Player:
             discussion_history=discussion_history,
         )
 
+        # Prepend role information if not already present
+        role_phrase = f"You are a {self.role.value}. "
+        if not prompt.startswith(role_phrase):
+            prompt = role_phrase + prompt
+
         response = self.get_response(prompt)
 
         # Parse the response for agree/disagree based on language

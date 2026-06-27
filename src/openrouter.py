@@ -103,8 +103,9 @@ def get_openrouter_response(model_name, prompt):
     # Get model-specific configuration if available
     model_config = config.MODEL_CONFIGS.get(model_name, {})
 
-    # Set timeout based on model config or defaults
+    # Set timeout and max_tokens based on model config or defaults
     timeout = model_config.get("timeout", config.API_TIMEOUT)
+    max_tokens = model_config.get("max_tokens", config.MAX_OUTPUT_TOKENS)
 
     headers = {
         "Authorization": f"Bearer {config.ROUTERAI_API_KEY}",
@@ -114,7 +115,7 @@ def get_openrouter_response(model_name, prompt):
     data = {
         "model": model_name,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": config.MAX_OUTPUT_TOKENS,
+        "max_tokens": max_tokens,
     }
 
     try:
