@@ -66,7 +66,14 @@ class GameOrchestrator:
             # Night phase (same round n)
             self.game.execute_night_phase()
 
-            # Post‑night processing: finalise the round data and prepare the next round
+            # Check game over after night *before* updating trust graphs
+            game_over, winner = self.game.check_game_over()
+            if game_over:
+                # Still record the final round's data
+                self.game.state.add_round_data(self.game.current_round_data)
+                break
+
+            # No game over yet — safe to update graphs and advance to next round
             self.update_all_graphs(self.game.round_number)
             self.game.state.add_round_data(self.game.current_round_data)
             self.game.round_number += 1
