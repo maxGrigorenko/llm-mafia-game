@@ -42,7 +42,7 @@ FIREBASE_CREDENTIALS_PATH = (
 
 # Game settings
 
-CLAUDE_SONNET_4 = "anthropic/claude-sonnet-4"
+REVIEW_MODEL = "deepseek/deepseek-v4-flash"
 MODELS = [
     # DeepSeek (via RouterAI)
     "deepseek/deepseek-v4-flash",
