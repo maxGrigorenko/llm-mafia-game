@@ -27,6 +27,16 @@ class NightExecutor:
                 self.game.discussion_history_without_thinking(),
             )
             response = player.get_response(prompt)
+
+            # Log private thoughts, if any
+            if player.last_think:
+                self.game.logger.player_thoughts(
+                    player.model_name,
+                    "Mafia",
+                    player.last_think,
+                    player_name=player.player_name,
+                )
+
             self.game.logger.player_response(
                 player.model_name, "Mafia", response, player_name=player.player_name
             )
@@ -100,6 +110,16 @@ class NightExecutor:
                 self.game.discussion_history_without_thinking(),
             )
             response = self.game.doctor_player.get_response(prompt)
+
+            # Log private thoughts, if any
+            if self.game.doctor_player.last_think:
+                self.game.logger.player_thoughts(
+                    self.game.doctor_player.model_name,
+                    "Doctor",
+                    self.game.doctor_player.last_think,
+                    player_name=self.game.doctor_player.player_name,
+                )
+
             self.game.logger.player_response(
                 self.game.doctor_player.model_name,
                 "Doctor",
@@ -264,19 +284,8 @@ class DayExecutor:
             self.game.current_round_data["vote_counts"] = vote_counts
             self.game.current_round_data["vote_details"] = vote_details
 
+        # Transition to night phase; round number and data are handled by the orchestrator
         self.game.phase = "night"
-        self.game.state.add_round_data(self.game.current_round_data)
-        self.game.round_number += 1
-        self.game.current_round_data = {
-            "round_number": self.game.round_number,
-            "messages": [],
-            "actions": {},
-            "eliminations": [],
-            "eliminated_by_vote": [],
-            "targeted_by_mafia": [],
-            "protected_by_doctor": [],
-            "outcome": "",
-        }
         return eliminated_players
 
     def _conduct_player_interactions(self, alive_players, phase_type, instruction, messages, collect_votes=False, votes=None):
@@ -320,6 +329,16 @@ class DayExecutor:
                 self.game.discussion_history_without_thinking(),
             )
             response = player.get_response(prompt)
+
+            # Log private thoughts, if any
+            if player.last_think:
+                self.game.logger.player_thoughts(
+                    player.model_name,
+                    player.role.value,
+                    player.last_think,
+                    player_name=player.player_name,
+                )
+
             self.game.logger.player_response(
                 player.model_name, player.role.value, response, player_name=player.player_name
             )
@@ -393,6 +412,16 @@ class DayExecutor:
             self.game.discussion_history_without_thinking(),
         )
         response = player.get_response(prompt)
+
+        # Log private thoughts, if any
+        if player.last_think:
+            self.game.logger.player_thoughts(
+                player.model_name,
+                player.role.value,
+                player.last_think,
+                player_name=player.player_name,
+            )
+
         self.game.logger.player_response(
             player.model_name,
             f"{player.role.value} (Last Words)",

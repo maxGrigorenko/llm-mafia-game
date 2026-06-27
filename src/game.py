@@ -142,8 +142,8 @@ class MafiaGame:
                 player.player_name, player.role.value, player.player_name
             )
 
-        # Set phase to night
-        self.phase = "night"
+        # Set phase to day (the game starts with day phase, not night)
+        self.phase = "day"
         self.round_number = 1
         self.current_round_data = {
             "round_number": self.round_number,

@@ -34,7 +34,7 @@ class GameOrchestrator:
 
     def run_game(self):
         """
-        Run the complete game loop.
+        Run the complete game loop (the game starts with a day phase).
 
         Returns:
             tuple: (winner, rounds_data, participants, language, critic_review)
@@ -45,7 +45,7 @@ class GameOrchestrator:
         game_over = False
         winner = None
 
-        while not game_over:
+        while True:
             game_over, winner = self.game.check_game_over()
             if game_over:
                 break
@@ -54,22 +54,32 @@ class GameOrchestrator:
             if self.game.round_number == 1:
                 self.init_all_graphs()
 
-            # Execute day phase
+            # Day phase (round n)
             self.game.execute_day_phase()
 
-            # Check if game is over after day
             game_over, winner = self.game.check_game_over()
             if game_over:
+                # Still record the day's data even if the game is over now
+                self.game.state.add_round_data(self.game.current_round_data)
                 break
 
-            # Execute night phase
+            # Night phase (same round n)
             self.game.execute_night_phase()
 
+            # Post‑night processing: finalise the round data and prepare the next round
             self.update_all_graphs(self.game.round_number)
-
-        # Add final round data if not already added
-        if self.game.current_round_data["round_number"] > 0:
             self.game.state.add_round_data(self.game.current_round_data)
+            self.game.round_number += 1
+            self.game.current_round_data = {
+                "round_number": self.game.round_number,
+                "messages": [],
+                "actions": {},
+                "eliminations": [],
+                "eliminated_by_vote": [],
+                "targeted_by_mafia": [],
+                "protected_by_doctor": [],
+                "outcome": "",
+            }
 
         # Create participants dictionary keyed by player_name
         participants = {}
@@ -140,7 +150,7 @@ Format your response as a JSON object with 'title', 'content', and 'one_liner' f
 """
 
         try:
-            model_name = config.CLAUDE_SONNET_4
+            model_name = config.REVIEW_MODEL
             response_content = get_llm_response(model_name, prompt)
 
             if response_content == "ERROR: Could not get response":

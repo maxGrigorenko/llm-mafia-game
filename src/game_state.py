@@ -47,6 +47,11 @@ class GameStateManager:
             if eliminations:
                 state += f"In the previous round, {', '.join(eliminations)} {'was' if len(eliminations) == 1 else 'were'} eliminated. "
 
+        # List alive players by name
+        alive_players = [p.player_name for p in self.players if p.alive]
+        alive_list_str = "Alive players: " + ", ".join(alive_players) if alive_players else "None"
+        state += alive_list_str
+
         return state
 
     def check_game_over(self):
