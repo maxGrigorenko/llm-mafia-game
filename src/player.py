@@ -49,6 +49,9 @@ class Player:
         self.prompt_builder = PromptBuilder()
         self.graph_sequence = []          # Stores per-phrase relationship graphs
 
+        # Store the most recent private thoughts extracted from the LLM response
+        self.last_think = ""
+
     def __str__(self):
         """Return a string representation of the player."""
         return f"{self.player_name} ({self.role.value}) [Model: {self.model_name}] ({self.use_graph=})"
@@ -218,23 +221,40 @@ class Player:
         Get a response from the LLM model using OpenRouter API.
         Uses model_name for the API call (hidden from other players).
 
+        The response is split into private thoughts (inside <think> tags)
+        and public speech (the rest).  Both parts are stored; callers can
+        access self.last_think to retrieve the private part.
+
         Args:
             prompt (str): The prompt to send to the model.
 
         Returns:
-            str: The response from the model with private thoughts removed.
+            str: The public part of the response (thoughts removed).
         """
         print(f"\n\n{len(prompt)=} {prompt=}\n\n")
-        response = get_llm_response(self.model_name, prompt)
+        raw_response = get_llm_response(self.model_name, prompt)
 
-        # Remove any <think> tags and their contents before sharing with other players
-        cleaned_response = re.sub(r"<[tT][hH][iI][nN][kK]>.*?</[tT][hH][iI][nN][kK]>", "", response, flags=re.DOTALL)
+        # Extract private thoughts from <think>...</think> blocks
+        think_pattern = re.compile(
+            r"<[tT][hH][iI][nN][kK]>(.*?)</[tT][hH][iI][nN][kK]>",
+            re.DOTALL,
+        )
+        think_matches = think_pattern.findall(raw_response)
+        self.last_think = "\n".join(think_matches).strip() if think_matches else ""
 
-        # Clean up any extra whitespace that might have been created
-        cleaned_response = re.sub(r"\n\s*\n", "\n\n", cleaned_response)
-        cleaned_response = cleaned_response.strip()
+        # Remove all <think>...</think> blocks to obtain the public message
+        public_response = re.sub(
+            r"<[tT][hH][iI][nN][kK]>.*?</[tT][hH][iI][nN][kK]>",
+            "",
+            raw_response,
+            flags=re.DOTALL,
+        )
 
-        return cleaned_response
+        # Clean up excessive whitespace
+        public_response = re.sub(r"\n\s*\n", "\n\n", public_response)
+        public_response = public_response.strip()
+
+        return public_response
 
     # ------------------------------------------------------------------
     # Response parsing
@@ -346,6 +366,23 @@ class Player:
             prompt = role_phrase + prompt
 
         response = self.get_response(prompt)
+
+        # Log private thoughts, if any
+        if self.last_think:
+            self.game.logger.player_thoughts(
+                self.model_name,
+                self.role.value,
+                self.last_think,
+                player_name=self.player_name,
+            )
+
+        # Log the public response
+        self.game.logger.player_response(
+            self.model_name,
+            self.role.value,
+            response,
+            player_name=self.player_name,
+        )
 
         # Parse the response for agree/disagree based on language
         language = (

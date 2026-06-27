@@ -199,6 +199,18 @@ class GameLogger:
         self.print(f"└─ {formatted_response}", Color.WHITE)
         self.print("")
 
+    def player_thoughts(self, model_name, role, thoughts, player_name=None):
+        """
+        Log the player's private (hidden) reasoning extracted from <think> blocks.
+        Displayed with a distinct visual style so the observer can tell
+        internal monologue from public declarations.
+        """
+        role_color = self.role_colors.get(role, Color.WHITE)
+        display_label = player_name if player_name else model_name
+        header = f"┌─ 💭 {display_label} ({role}) [{model_name}] (private thoughts)"
+        self.print(header, role_color, bold=True)
+        self.print(f"└─ {thoughts}", Color.BRIGHT_BLACK)
+        self.print("")
 
     def player_action(self, model_name, role, action, player_name=None):
         """

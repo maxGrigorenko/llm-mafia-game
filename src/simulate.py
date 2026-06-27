@@ -277,16 +277,17 @@ if __name__ == "__main__":
     elif args.ollama:
         models = config.OLLAMA_MODELS
     else:
-        models = None
+        # Default to the ROUTERAI_MODELS list (usually 6 deepseek-v4-flash players)
+        models = config.ROUTERAI_MODELS
     
     # Log which models are being used
     logger = GameLogger()
     if args.free_models:
-        logger.print(f"Using free OpenRouter models only: {len(config.FREE_MODELS)} models available", Color.CYAN, bold=True)
+        logger.print(f"Using free RouterAI models only: {len(config.FREE_MODELS)} models available", Color.CYAN, bold=True)
     elif args.ollama:
         logger.print(f"Using Ollama models only: {len(config.OLLAMA_MODELS)} models available", Color.CYAN, bold=True)
     else:
-        logger.print(f"Using all OpenRouter models: {len(config.MODELS)} models available", Color.CYAN, bold=True)
+        logger.print(f"Using RouterAI models (ROUTERAI_MODELS): {len(models)} model(s)", Color.CYAN, bold=True)
 
     # Run simulation
     run_simulation(
