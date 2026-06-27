@@ -174,7 +174,17 @@ class MafiaGame:
         self.state.round_number = self.round_number
         self.state.phase = self.phase
         self.state.current_round_data = self.current_round_data
-        return self.state.get_game_state()
+        base_state = self.state.get_game_state()
+        # Add game configuration information for players
+        total_mafia = sum(1 for p in self.players if p.role == Role.MAFIA)
+        total_doctor = sum(1 for p in self.players if p.role == Role.DOCTOR)
+        total_villager = sum(1 for p in self.players if p.role == Role.VILLAGER)
+        doctor_word = "Doctors" if total_doctor != 1 else "Doctor"
+        config_info = (
+            f"Game configuration: {total_villager} Villagers, "
+            f"{total_mafia} Mafia, and {total_doctor} {doctor_word}."
+        )
+        return f"{config_info} {base_state}"
 
     def get_alive_players(self):
         """Return list of alive players, delegating to GameStateManager."""
