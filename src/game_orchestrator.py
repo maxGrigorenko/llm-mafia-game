@@ -86,6 +86,7 @@ class GameOrchestrator:
                 "targeted_by_mafia": [],
                 "protected_by_doctor": [],
                 "outcome": "",
+                "bigfive_assessments": [],
             }
 
         # Create participants dictionary keyed by player_name

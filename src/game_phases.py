@@ -1,6 +1,9 @@
+import time
 import config
 from logger import Color
 from game_templates import Role
+import big_five
+
 
 class NightExecutor:
     def __init__(self, game):
@@ -390,6 +393,41 @@ class DayExecutor:
                         self.game.logger.warning(
                             f"[PhraseGraph] Failed to generate per-phrase graph for "
                             f"{listener.player_name} on message from {player.player_name}: {e}"
+                        )
+
+            # ---- Big Five assessment (step 7) ----
+            if config.BIGFIVE_ENABLED:
+                for observer in alive_players:
+                    if not observer.use_big_five or not observer.alive or observer == player:
+                        continue
+                    try:
+                        scores = big_five.estimate_bigfive(
+                            message=response,
+                            speaker=player.player_name,
+                            model_name=observer.model_name,
+                        )
+                        assessment_record = {
+                            "observer": observer.player_name,
+                            "speaker": player.player_name,
+                            "round": self.game.round_number,
+                            "phase": phase_type,
+                            "timestamp": time.time(),
+                            "scores": scores.to_dict(),
+                        }
+                        observer.bigfive_assessments.append(assessment_record)
+                        # Also store globally in round data
+                        self.game.current_round_data.setdefault(
+                            "bigfive_assessments", []
+                        ).append(assessment_record)
+
+                        # Keep the latest estimated Big Five profile for the speaker
+                        # so that the trust graph update can use it later.
+                        observer.bigfive_speaker_estimates[player.player_name] = scores
+
+                    except Exception as e:
+                        self.game.logger.warning(
+                            f"[BigFive] Assessment failed for {observer.player_name} "
+                            f"on {player.player_name}: {e}"
                         )
 
             self.game.discussion_history += f"{player.player_name}: {response}\n\n"

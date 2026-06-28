@@ -11,6 +11,7 @@ from logger import GameLogger, Color
 from game_state import GameStateManager, DiscussionHistory
 from game_orchestrator import GameOrchestrator
 from game_phases import NightExecutor, DayExecutor
+import big_five
 
 
 class MafiaGame:
@@ -144,6 +145,26 @@ class MafiaGame:
                 player.model_name, player.role.value, player.player_name
             )
 
+        # ---- Big Five personality setup (step 5) ----
+        if config.BIGFIVE_ENABLED:
+            # Ensure registry is loaded once per process (idempotent)
+            big_five.load_registry()
+            for player in self.players:
+                # Assign a permanent Big Five profile (random if missing)
+                profile = big_five.get_profile(player.player_name)
+                player.bigfive_profile = profile
+
+                # Determine whether this player should perform Big Five assessments
+                if isinstance(config.USE_BIG_FIVE_FOR_MODEL, bool):
+                    use_for_player = config.USE_BIG_FIVE_FOR_MODEL
+                else:
+                    use_for_player = config.USE_BIG_FIVE_FOR_MODEL.get(
+                        player.model_name, False
+                    )
+
+                if use_for_player:
+                    player.use_big_five = True
+
         # Set phase to day (the game starts with day phase, not night)
         self.phase = "day"
         self.round_number = 1
@@ -156,6 +177,7 @@ class MafiaGame:
             "targeted_by_mafia": [],   # Reset for the new round
             "protected_by_doctor": [], # Reset for the new round
             "outcome": "",
+            "bigfive_assessments": [], # Big Five assessments accumulated during this round
         }
 
         # Sync state after setup

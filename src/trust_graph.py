@@ -322,7 +322,7 @@ class TrustGraph:
     # Graph update
     # ------------------------------------------------------------------
 
-    def update(self, all_players, current_round: int, discussion_history: str, model_name: str) -> None:
+    def update(self, all_players, current_round: int, discussion_history: str, model_name: str, bigfive_estimates: dict = None, night_outcome: str = "") -> None:
         """
         Update the trust graph based on the last round's discussion using an LLM call.
 
@@ -331,6 +331,11 @@ class TrustGraph:
             current_round (int): Current round number.
             discussion_history (str): The last round's discussion text (already stripped of think tags).
             model_name (str): The LLM model name to use for the update call.
+            bigfive_estimates (dict, optional): The owning player's latest Big Five estimates
+                for other players, mapping player_name -> BigFiveProfile (or dict with scores).
+            night_outcome (str, optional): A description of what happened during the
+                just‑completed night phase (e.g. “X was killed by the Mafia.”
+                or “The Doctor protected Y.”). Will be included in the LLM prompt.
         """
         if self.graph is None:
             return
@@ -349,7 +354,7 @@ class TrustGraph:
         if len(alive_players) <= 1:
             return
 
-        prompt = self._build_update_prompt(alive_players, discussion_history, current_round)
+        prompt = self._build_update_prompt(alive_players, discussion_history, current_round, bigfive_estimates, night_outcome)
         if prompt is None:
             return
 
@@ -359,7 +364,7 @@ class TrustGraph:
         except Exception as e:
             print(f"[{self.player_name}] Graph update failed: {e}")
 
-    def _build_update_prompt(self, alive_players, last_round_history: str, current_round: int):
+    def _build_update_prompt(self, alive_players, last_round_history: str, current_round: int, bigfive_estimates: dict = None, night_outcome: str = ""):
         """
         Build the prompt for the LLM to evaluate trust and role probabilities.
         All players are referenced by player_name.
@@ -368,6 +373,9 @@ class TrustGraph:
             alive_players (list): List of alive Player objects.
             last_round_history (str): The last round's discussion text.
             current_round (int): Current round number.
+            bigfive_estimates (dict, optional): Latest Big Five estimates for other players,
+                keyed by player_name.
+            night_outcome (str, optional): What happened during the night phase (if any).
 
         Returns:
             str or None: The prompt string, or None if there is nothing to evaluate.
@@ -411,6 +419,41 @@ class TrustGraph:
         if not players_to_evaluate:
             return None
 
+        # ----- Big Five estimates section (if available) -----
+        bigfive_section = ""
+        if bigfive_estimates:
+            bf_lines = []
+            for pname in players_to_evaluate:
+                profile = bigfive_estimates.get(pname)
+                if profile is not None:
+                    # profile may be a BigFiveProfile dataclass or a plain dict
+                    if hasattr(profile, 'openness'):
+                        o = profile.openness
+                        c = profile.conscientiousness
+                        e = profile.extraversion
+                        a = profile.agreeableness
+                        n = profile.neuroticism
+                    else:
+                        o = profile.get('openness', 3.0)
+                        c = profile.get('conscientiousness', 3.0)
+                        e = profile.get('extraversion', 3.0)
+                        a = profile.get('agreeableness', 3.0)
+                        n = profile.get('neuroticism', 3.0)
+                    bf_lines.append(
+                        f"  - {pname}: Openness={o:.1f}, Conscientiousness={c:.1f}, "
+                        f"Extraversion={e:.1f}, Agreeableness={a:.1f}, Neuroticism={n:.1f}"
+                    )
+            if bf_lines:
+                bigfive_section = (
+                    "\n\nYOUR CURRENT BIG FIVE ESTIMATES FOR OTHER PLAYERS "
+                    "(based on their messages so far):\n" + "\n".join(bf_lines)
+                )
+
+        # ----- Night outcome section (if available) -----
+        night_outcome_section = ""
+        if night_outcome:
+            night_outcome_section = f"\n\n=== LAST NIGHT'S OUTCOME ===\n{night_outcome}"
+
         prompt = f"""You are {self.player_name} analyzing Round {current_round} of a Mafia game.
 
 {role_context}
@@ -419,7 +462,7 @@ class TrustGraph:
 {last_round_history}
 
 === YOUR CURRENT ASSESSMENTS ===
-{graph_state}
+{graph_state}{bigfive_section}{night_outcome_section}
 
 === TASK ===
 Based on the discussion, update your assessment of these players: {', '.join(players_to_evaluate)}
@@ -436,6 +479,7 @@ Consider:
 - Voting patterns and flip-flopping
 - Emotional reactions vs logical arguments
 - Who tries to lead vs who stays quiet?
+- (If Big Five estimates are available) how consistent a player's traits are with a typical Mafia or innocent profile.
 
 Respond ONLY with valid JSON:
 {{

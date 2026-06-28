@@ -48,6 +48,7 @@ class Player:
         self.use_big_five = use_big_five          # Big Five assessment activation
         self.bigfive_profile: Optional[BigFiveProfile] = None
         self.bigfive_assessments: list = []       # accumulated per-observer estimates
+        self.bigfive_speaker_estimates: dict = {} # latest Big Five estimate for each speaker (observer's view)
         self.trust_graph = None           # TrustGraph instance (replaces self.graph)
         self.protected = False            # Whether the player is protected by the doctor
         self.language = language if language else "English"
@@ -101,11 +102,24 @@ class Player:
 
         last_round_history = self.discussion_history_last_round_without_thinking()
 
+        # Pass current Big Five estimates (latest per speaker) if this player uses Big Five
+        bigfive_estimates = {}
+        if self.use_big_five and config.BIGFIVE_ENABLED:
+            bigfive_estimates = getattr(self, 'bigfive_speaker_estimates', {})
+
+        # Retrieve the outcome of the just‑completed night phase so that
+        # the LLM can take it into account when re‑evaluating trust.
+        night_outcome = ""
+        if self.game:
+            night_outcome = self.game.current_round_data.get("outcome", "")
+
         self.trust_graph.update(
             all_players=all_players,
             current_round=current_round,
             discussion_history=last_round_history,
             model_name=self.model_name,
+            bigfive_estimates=bigfive_estimates,
+            night_outcome=night_outcome,
         )
 
     # ------------------------------------------------------------------

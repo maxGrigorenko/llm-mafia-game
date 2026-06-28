@@ -159,6 +159,19 @@ class PromptBuilder:
                 discussion_history=context,
             )
 
+        # ---- Big Five personality injection (step 6) ----
+        if player.use_big_five and player.bigfive_profile is not None:
+            profile = player.bigfive_profile
+            personality_block = (
+                f"\nYOUR PERSONALITY TRAITS (act accordingly):\n"
+                f" - Openness: {profile.openness}\n"
+                f" - Conscientiousness: {profile.conscientiousness}\n"
+                f" - Extraversion: {profile.extraversion}\n"
+                f" - Agreeableness: {profile.agreeableness}\n"
+                f" - Neuroticism: {profile.neuroticism}\n"
+            )
+            prompt += personality_block
+
         return prompt
 
     def build_confirmation_vote_prompt(self, player, game_state, all_players, discussion_history):
@@ -212,5 +225,18 @@ class PromptBuilder:
             thinking_tag=THINKING_TAGS[language],
             discussion_history=context,
         )
+
+        # ---- Big Five personality injection (step 6) ----
+        if player.use_big_five and player.bigfive_profile is not None:
+            profile = player.bigfive_profile
+            personality_block = (
+                f"\nYOUR PERSONALITY TRAITS (act accordingly):\n"
+                f" - Openness: {profile.openness}\n"
+                f" - Conscientiousness: {profile.conscientiousness}\n"
+                f" - Extraversion: {profile.extraversion}\n"
+                f" - Agreeableness: {profile.agreeableness}\n"
+                f" - Neuroticism: {profile.neuroticism}\n"
+            )
+            prompt += personality_block
 
         return prompt

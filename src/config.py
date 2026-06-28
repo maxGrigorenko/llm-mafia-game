@@ -156,7 +156,7 @@ UNIQUE_MODELS = False   # was: os.getenv("UNIQUE_MODELS", "true") == "true"
 # Big Five personality trait tracking (steps 1‑4)
 # ----------------------------------------------------------------------
 # Master switch – set to True to activate the entire Big Five pipeline
-BIGFIVE_ENABLED = False
+BIGFIVE_ENABLED = True
 
 # Model used when an observer calls estimate_bigfive()
 BIGFIVE_MODEL = "deepseek/deepseek-v4-flash"
