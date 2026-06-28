@@ -101,7 +101,7 @@ class GameOrchestrator:
         critic_review = self.generate_critic_review(winner)
 
         # Log game end
-        self.game.logger.game_end(1, winner, self.game.round_number)
+        self.game.logger.game_end(self.game.game_number, winner, self.game.round_number)
 
         return winner, self.game.rounds_data, participants, self.game.language, critic_review
 

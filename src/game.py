@@ -16,17 +16,19 @@ from game_phases import NightExecutor, DayExecutor
 class MafiaGame:
     """Represents a Mafia game with LLM players."""
 
-    def __init__(self, models=None, language=None):
+    def __init__(self, models=None, language=None, game_number=1):
         """
         Initialize a Mafia game.
 
         Args:
             models (list, optional): List of model names to use as players.
             language (str, optional): Language for game prompts and interactions. Defaults to config.LANGUAGE.
+            game_number (int, optional): Sequential game number for logging. Defaults to 1.
         """
         self.game_id = str(uuid.uuid4())
         self.round_number = 0
         self.phase = "setup"
+        self.game_number = game_number
 
         # state manager
         self.language = language if language is not None else config.LANGUAGE
@@ -78,7 +80,7 @@ class MafiaGame:
             return False
 
         # Log game start
-        self.logger.game_start(1, self.game_id, self.language)
+        self.logger.game_start(self.game_number, self.game_id, self.language)
 
         # Randomly select models for this game
         if self.unique_models:
@@ -139,7 +141,7 @@ class MafiaGame:
 
             # Log player setup using player_name as the visible identifier
             self.logger.player_setup(
-                player.player_name, player.role.value, player.player_name
+                player.model_name, player.role.value, player.player_name
             )
 
         # Set phase to day (the game starts with day phase, not night)
