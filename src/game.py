@@ -17,7 +17,7 @@ import big_five
 class MafiaGame:
     """Represents a Mafia game with LLM players."""
 
-    def __init__(self, models=None, language=None, game_number=1):
+    def __init__(self, models=None, language=None, game_number=1, fixed_names=None):
         """
         Initialize a Mafia game.
 
@@ -25,11 +25,14 @@ class MafiaGame:
             models (list, optional): List of model names to use as players.
             language (str, optional): Language for game prompts and interactions. Defaults to config.LANGUAGE.
             game_number (int, optional): Sequential game number for logging. Defaults to 1.
+            fixed_names (list, optional): Pre‑determined player names to use across games
+                (needed for Big‑Five persistence). Must have length == PLAYERS_PER_GAME.
         """
         self.game_id = str(uuid.uuid4())
         self.round_number = 0
         self.phase = "setup"
         self.game_number = game_number
+        self.fixed_names = fixed_names
 
         # state manager
         self.language = language if language is not None else config.LANGUAGE
@@ -89,6 +92,12 @@ class MafiaGame:
         else:
             selected_models = random.choices(self.models, k=config.PLAYERS_PER_GAME)
 
+        # Use fixed player names if provided; otherwise generate as before
+        if self.fixed_names and len(self.fixed_names) == len(selected_models):
+            preset_names = list(self.fixed_names)
+        else:
+            preset_names = None
+
         # Assign roles
         roles = []
 
@@ -113,15 +122,19 @@ class MafiaGame:
         # Create players
         self.logger.header("PLAYER SETUP", Color.CYAN)
         for i, model_name in enumerate(selected_models):
-            # Generate a unique player name (not based on model name)
-            used_names = [p.player_name for p in self.players]
-            available_names = [name for name in player_names if name not in used_names]
-
-            # If we somehow run out of names, use a numbered fallback
-            if not available_names:
-                player_name = f"Player_{i+1}"
+            # Determine player name
+            if preset_names is not None:
+                player_name = preset_names[i]
             else:
-                player_name = random.choice(available_names)
+                # Generate a unique player name (not based on model name)
+                used_names = [p.player_name for p in self.players]
+                available_names = [name for name in player_names if name not in used_names]
+
+                # If we somehow run out of names, use a numbered fallback
+                if not available_names:
+                    player_name = f"Player_{i+1}"
+                else:
+                    player_name = random.choice(available_names)
 
             # use_graph = False
             # if roles[i] == Role.VILLAGER or roles[i] == Role.DOCTOR:

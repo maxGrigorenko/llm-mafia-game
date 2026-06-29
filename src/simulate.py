@@ -8,11 +8,12 @@ import concurrent.futures
 from collections import defaultdict
 import argparse
 import config
-from game import MafiaGame
+from game import MafiaGame, player_names
 from logger import GameLogger, Color
+import big_five
 
 
-def run_single_game(game_number, language=None, models=None):
+def run_single_game(game_number, language=None, models=None, fixed_names=None):
     """
     Run a single Mafia game.
 
@@ -20,12 +21,21 @@ def run_single_game(game_number, language=None, models=None):
         game_number (int): The game number.
         language (str, optional): Language for game prompts and interactions. Defaults to config.LANGUAGE.
         models (list, optional): List of model names to use as players. Defaults to config.MODELS.
+        fixed_names (list, optional): Fixed player names to use across games for Big Five persistence.
 
     Returns:
         tuple: (game_number, winner, rounds_data, participants, game_id, language, critic_review)
     """
-    game = MafiaGame(models=models, language=language, game_number=game_number)
+    game = MafiaGame(models=models, language=language, game_number=game_number, fixed_names=fixed_names)
     winner, rounds_data, participants, language, critic_review = game.run_game()
+
+    # Persist Big Five assessments and cumulative profiles across games
+    if config.BIGFIVE_ENABLED:
+        for player in game.players:
+            if player.use_big_five and player.bigfive_assessments:
+                big_five.add_assessments(player.player_name, player.bigfive_assessments)
+        big_five.save_registry()
+
     return (
         game_number,
         winner,
@@ -57,6 +67,18 @@ def run_simulation(
     logger = GameLogger()
     logger.header(f"STARTING SIMULATION WITH {num_games} GAMES", Color.BRIGHT_MAGENTA)
 
+    # ---- Big Five persistence: load registry and generate fixed player names ----
+    if config.BIGFIVE_ENABLED:
+        big_five.load_registry()
+        # Create persistent player names once for the whole simulation
+        if not hasattr(run_simulation, '_simulation_fixed_names'):
+            names_pool = list(player_names)
+            random.shuffle(names_pool)
+            run_simulation._simulation_fixed_names = names_pool[:config.PLAYERS_PER_GAME]
+        fixed_names = run_simulation._simulation_fixed_names
+    else:
+        fixed_names = None
+
     start_time = time.time()
 
     # Initialize statistics
@@ -87,7 +109,7 @@ def run_simulation(
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all games
             future_to_game = {
-                executor.submit(run_single_game, i, game_language, models): i
+                executor.submit(run_single_game, i, game_language, models, fixed_names): i
                 for i in range(1, num_games + 1)
             }
 
@@ -166,7 +188,7 @@ def run_simulation(
                     game_id,
                     language,
                     critic_review,
-                ) = run_single_game(i, game_language, models)
+                ) = run_single_game(i, game_language, models, fixed_names)
 
                 # Update statistics
                 stats["completed_games"] += 1
@@ -218,6 +240,10 @@ def run_simulation(
 
             except Exception as e:
                 logger.error(f"Game {game_number} generated an exception: {e}")
+
+    # Final persistence save (optional, already saved after each game)
+    if config.BIGFIVE_ENABLED:
+        big_five.save_registry()
 
     # Calculate elapsed time
     elapsed_time = time.time() - start_time

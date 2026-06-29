@@ -416,14 +416,17 @@ class DayExecutor:
                         }
                         observer.bigfive_assessments.append(assessment_record)
                         # Also store globally in round data
-                        self.game.current_round_data.setdefault(
-                            "bigfive_assessments", []
-                        ).append(assessment_record)
+                        self.game.current_round_data["bigfive_assessments"].append(assessment_record)
 
                         # Keep the latest estimated Big Five profile for the speaker
-                        # so that the trust graph update can use it later.
                         observer.bigfive_speaker_estimates[player.player_name] = scores
 
+                        # Update observer's cumulative Big Five estimate (persists across games)
+                        big_five.apply_cumulative_estimate(
+                            observer.player_name,
+                            player.player_name,
+                            scores,
+                        )
                     except Exception as e:
                         self.game.logger.warning(
                             f"[BigFive] Assessment failed for {observer.player_name} "

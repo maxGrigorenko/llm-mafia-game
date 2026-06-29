@@ -131,6 +131,21 @@ def update_bigfive_for_speaker(
     return new_cum
 
 
+def apply_cumulative_estimate(observer: str, speaker: str, raw: BigFiveProfile, blend_factor: float = None) -> BigFiveProfile:
+    """Blend a raw Big Five estimate into the observer's cumulative profile without calling LLM."""
+    global _cumulative_profiles
+    if blend_factor is None:
+        blend_factor = config.BIGFIVE_BLEND_FACTOR
+    previous = _cumulative_profiles.get(observer, {}).get(speaker)
+    if previous is None:
+        previous = _NEUTRAL_PROFILE
+    new_cum = _compute_blended_profile(previous, raw, blend_factor)
+    if observer not in _cumulative_profiles:
+        _cumulative_profiles[observer] = {}
+    _cumulative_profiles[observer][speaker] = new_cum
+    return new_cum
+
+
 def get_cumulative_profile(observer: str, speaker: str) -> Optional[BigFiveProfile]:
     """
     Return the observer's current cumulative Big Five estimate for the speaker,

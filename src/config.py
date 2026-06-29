@@ -171,3 +171,6 @@ BIGFIVE_REGISTRY_FILE = os.getenv(
     "BIGFIVE_REGISTRY_FILE",
     "data/bigfive_registry.json",
 )
+
+# Blending factor for cumulative Big Five estimates (exponential moving average)
+BIGFIVE_BLEND_FACTOR = float(os.getenv("BIGFIVE_BLEND_FACTOR", "0.3"))
